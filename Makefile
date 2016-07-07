@@ -1,4 +1,4 @@
-################################
+################ Main ################
 
 # This should bring up a full test server in docker from a bare repo.
 # Certs are generated outside the docker container, for persistence.
@@ -9,7 +9,7 @@ docker: certs-test docker-build docker-run
 .PHONY: deploy
 deploy: certs-prod jekyll-prod upload nginx
 
-################################
+################ Jekyll ################
 
 .PHONY: jekyll-test
 jekyll-test:
@@ -19,15 +19,26 @@ jekyll-test:
 jekyll-prod:
 	DOMAIN="badssl.com" jekyll build
 
+################ Certs ################
+
 .PHONY: certs-test
-certs-test:
+certs-test: clean-certs
 	cd certs && make test O=sets/test D=badssl.test
-	cd certs/sets && rm -rf current && cp -R test current
+	cp -R certs/sets/test certs/sets/current
+	cp certs/sets/current/gen/crt/ca-root.crt common/certs
+	cp certs/sets/current/gen/crt/ca-untrusted-root.crt common/certs
 
 .PHONY: certs-prod
-certs-prod:
+certs-prod: clean-certs
 	cd certs && make prod O=sets/prod D=badssl.com
-	cd certs/sets && rm -rf current && cp -R prod current
+	cp -R certs/sets/prod certs/sets/current
+	cp certs/sets/current/gen/crt/ca-untrusted-root.crt common/certs
+
+.PHONY: clean-certs
+clean-certs: 
+	rm -rf certs/sets/*/gen
+	rm -rf certs/sets/current
+	rm -rf common/certs/*.crt
 
 ################ Installation ################
 
@@ -48,11 +59,9 @@ link:
 install: install-keys link
 
 .PHONY: clean
-clean:
+clean: clean-certs
 	rm -rf _site
 	rm -f /etc/keys/*.key
-	# rm -f common/certs/*.pem
-	rm -rf certs/sets/*/gen
 
 ################ Docker ################
 
@@ -75,11 +84,11 @@ upload:
 		-e "ssh -i ${HOME}/.ssh/google_compute_engine" \
 		--exclude .DS_Store \
 		--exclude .git \
+		--delete  --delete-excluded \
 		--exclude _site/domains/cert/rsa512 \
 		--exclude _site/domains/cert/rsa512.conf \
 		--exclude _site/domains/cert/rsa1024 \
 		--exclude _site/domains/cert/rsa1024.conf \
-		--delete  --delete-excluded \
 		./ \
 		badssl.com:~/badssl/
 	echo "\nDone deploying.\n"
